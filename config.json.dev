@@ -1,0 +1,19 @@
+{
+  "certSourceDir": "/opt/cert_distributions/",
+  "confList": [
+    {
+      "domain": "xxx.com",
+      "dns": "dns_ali",
+      "access_name": "阿里云DNS",
+      "access_key": "LTAI5tR",
+      "access_secret": "T7ffy",
+      "name": "火山云 ssp",
+      "target_user": "root",
+      "target_ip": "14.103.0.0",
+      "target_dir": "/usr/local/nginx1.28/conf/cert",
+      "reload_cmd": "/usr/local/nginx1.28/sbin/nginx -s reload",
+      "status": 1,
+      "remark": ""
+    }
+  ]
+}
