@@ -1,5 +1,5 @@
 {
-  "certSourceDir": "/opt/cert_distributions/",
+  "certSourceDir": "/opt/cert_zip/",
   "confList": [
     {
       "domain": "xxx.com",

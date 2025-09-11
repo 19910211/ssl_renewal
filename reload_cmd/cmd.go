@@ -19,11 +19,12 @@ import (
 )
 
 var (
-	config   string
-	domain   string
-	StartCmd = &cobra.Command{
+	config        string
+	domain        string
+	certSourceDir string
+	StartCmd      = &cobra.Command{
 		Use:          "reload",
-		Example:      "ssl_renewal reload -c config.json -d asleyu.com",
+		Example:      "ssl_renewal reload -c config.json -d you.com",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return run()
@@ -34,6 +35,7 @@ var (
 func init() {
 	StartCmd.PersistentFlags().StringVarP(&config, "config", "c", "config.json", "provided configuration file")
 	StartCmd.Flags().StringVarP(&domain, "domain", "d", "", "域名")
+	StartCmd.Flags().StringVarP(&certSourceDir, "cert-dir", "", "", "SSL Certificate Directory")
 	StartCmd.MarkFlagRequired("domain")
 }
 
@@ -51,15 +53,19 @@ func run() error {
 		return fmt.Errorf("❌ domain is required")
 	}
 
-	var certSourceDir string
-	if c.CertSourceDir != "" {
-		if strings.HasSuffix(c.CertSourceDir, "/") {
-			certSourceDir = c.CertSourceDir
+	if certSourceDir == "" {
+		if c.CertSourceDir == "" {
+			exePath, err := os.Executable()
+			if err != nil {
+				fmt.Println("获取可执行文件路径失败:", err)
+				certSourceDir = "/tmp/cert_zip"
+			} else {
+				// 获取可执行文件所在目录
+				certSourceDir = filepath.Join(filepath.Dir(exePath), "cert_zip")
+			}
 		} else {
-			certSourceDir = c.CertSourceDir + "/"
+			certSourceDir = c.CertSourceDir
 		}
-	} else {
-		certSourceDir = "/tmp/cert_distributions/"
 	}
 
 	err := os.MkdirAll(certSourceDir, 0755)
@@ -70,7 +76,7 @@ func run() error {
 
 	// 打包
 	var (
-		files     = []string{certSourceDir + domain + ".key", certSourceDir + domain + ".pem"}
+		files     = []string{filepath.Join(certSourceDir, domain+".key"), filepath.Join(certSourceDir, domain+".pem")}
 		fileInfos []FileInfo
 	)
 	for _, filePath := range files {
@@ -84,7 +90,7 @@ func run() error {
 		})
 	}
 
-	var CERT_PACKAGE = certSourceDir + domain + ".tar.gz"
+	var CERT_PACKAGE = filepath.Join(certSourceDir, domain+".tar.gz")
 
 	fmt.Printf("📦 打包中 %s", CERT_PACKAGE)
 	if err = TarSpecificFiles(CERT_PACKAGE, fileInfos, true); err != nil {
@@ -105,8 +111,9 @@ func getDomainConfs(c conf.ConfList, domain string) []*conf.Config {
 	var list []*conf.Config
 	var set = map[string]bool{}
 	for _, c2 := range c.List {
-		if c2.Domain == domain && c2.Status == 1 && !set[c2.TargetIP+c2.TargetDir] {
-			set[c2.TargetUser+c2.TargetDir] = true
+		key := c2.TargetIP + c2.TargetPort + c2.TargetUser + c2.TargetDir
+		if c2.Domain == domain && c2.Status == 1 && !set[key] {
+			set[key] = true
 			list = append(list, c2)
 		}
 	}

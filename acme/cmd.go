@@ -15,7 +15,7 @@ var (
 	staging, force, renew, renewAll bool
 	StartCmd                        = &cobra.Command{
 		Use:          "acme",
-		Example:      "ssl_renewal acme -c config.json -d asleyu.com --server letsencrypt --days 60 --staging",
+		Example:      "ssl_renewal acme -c config.json -d you.com --server letsencrypt --days 60 --staging",
 		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			run()
