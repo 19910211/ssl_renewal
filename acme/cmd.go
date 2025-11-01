@@ -116,7 +116,6 @@ func run() error {
 
 	if err := cmd.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "❌ 执行 acme.sh 出错:", cmd.String(), err)
-		os.Exit(1)
 	}
 
 	return nil

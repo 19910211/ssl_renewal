@@ -11,5 +11,5 @@ ssl_renewal 二进制执行文件
 run.sh 运行脚本
 
 ```shell
-./run.sh -d  you.com
+./run.sh  --cert-dir /usr/local/nginx/conf/cert --domain you.com 
 ```

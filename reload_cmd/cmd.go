@@ -79,6 +79,7 @@ func run() error {
 		files     = []string{filepath.Join(certSourceDir, domain+".key"), filepath.Join(certSourceDir, domain+".pem")}
 		fileInfos []FileInfo
 	)
+
 	for _, filePath := range files {
 		absPath, err := filepath.Abs(filePath)
 		if err != nil {
@@ -107,14 +108,18 @@ func run() error {
 }
 
 // getDomainConfs 获取这个域名的 目标配置
-func getDomainConfs(c conf.ConfList, domain string) []*conf.Config {
-	var list []*conf.Config
+func getDomainConfs(c conf.ConfList, domain string) []*conf.Target {
+	var list []*conf.Target
 	var set = map[string]bool{}
 	for _, c2 := range c.List {
-		key := c2.TargetIP + c2.TargetPort + c2.TargetUser + c2.TargetDir
-		if c2.Domain == domain && c2.Status == 1 && !set[key] {
-			set[key] = true
-			list = append(list, c2)
+		if c2.Domain == domain && c2.Status == 1 {
+			for _, target := range c2.Targets {
+				if target.Status == 1 {
+					key := domain + target.TargetIP + target.TargetPort + target.TargetUser + target.TargetDir
+					set[key] = true
+					list = append(list, target)
+				}
+			}
 		}
 	}
 
@@ -320,7 +325,7 @@ type SSHConfig struct {
 }
 
 // DeployWithSSH 使用纯 Go SSH 实现部署
-func DeployWithSSH(confList []*conf.Config, certPackage string) error {
+func DeployWithSSH(confList []*conf.Target, certPackage string) error {
 	certData, err := os.ReadFile(certPackage)
 	if err != nil {
 		return fmt.Errorf("❌ 读取证书文件失败: %v", err)
@@ -332,7 +337,7 @@ func DeployWithSSH(confList []*conf.Config, certPackage string) error {
 		fmt.Printf("🚀 === 正在部署到服务器: %s === %s \n", c.TargetIP, c.TargetDir)
 
 		if c.TargetIP == "" {
-			fmt.Printf("❌ Name:%s TargetIP is empty", c.Name)
+			fmt.Printf("❌ Name:%s TargetIP is empty", c.TargetName)
 		}
 
 		var user = c.TargetUser

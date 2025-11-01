@@ -144,7 +144,7 @@ set_cert_paths
 # 执行证书安装
 if [[ "$INSTALL_CERT" == true ]]; then
     # 构建证书安装命令
-    RELOAD_CMD="/root/.acme.sh/ssl_renewal reload -c /root/.acme.sh/config.json -d $DOMAIN --cert-dir \"$CERT_DIR\""
+    RELOAD_CMD="/usr/local/nginx/sbin/nginx -s reload && /root/.acme.sh/ssl_renewal reload -c /root/.acme.sh/config.json -d $DOMAIN --cert-dir \"$CERT_DIR\""
 
     INSTALL_CMD="/root/.acme.sh/acme.sh --installcert -d $DOMAIN \
         --key-file \"$KEY_FILE\" \
