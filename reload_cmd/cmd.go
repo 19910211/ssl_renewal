@@ -22,6 +22,7 @@ var (
 	config        string
 	domain        string
 	certSourceDir string
+	keyMod        string
 	StartCmd      = &cobra.Command{
 		Use:          "reload",
 		Example:      "ssl_renewal reload -c config.json -d you.com",
@@ -36,6 +37,7 @@ func init() {
 	StartCmd.PersistentFlags().StringVarP(&config, "config", "c", "config.json", "provided configuration file")
 	StartCmd.Flags().StringVarP(&domain, "domain", "d", "", "域名")
 	StartCmd.Flags().StringVarP(&certSourceDir, "cert-dir", "", "", "SSL Certificate Directory")
+	StartCmd.Flags().StringVarP(&keyMod, "key_mod", "", "", "证书类型")
 	StartCmd.MarkFlagRequired("domain")
 }
 
@@ -68,6 +70,7 @@ func run() error {
 		}
 	}
 
+	certSourceDir = filepath.Join(certSourceDir, keyMod)
 	err := os.MkdirAll(certSourceDir, 0755)
 	if err != nil {
 		fmt.Printf("❌ 创建目录失败: %v\n", err)
@@ -100,7 +103,7 @@ func run() error {
 	fmt.Printf("📦 打包完成 %s", CERT_PACKAGE)
 
 	confList := getDomainConfs(c, domain)
-	if err := DeployWithSSH(confList, CERT_PACKAGE); err != nil {
+	if err := DeployWithSSH(confList, CERT_PACKAGE, keyMod); err != nil {
 		log.Fatalf("❌ 部署失败: %v", err)
 	}
 
@@ -325,7 +328,7 @@ type SSHConfig struct {
 }
 
 // DeployWithSSH 使用纯 Go SSH 实现部署
-func DeployWithSSH(confList []*conf.Target, certPackage string) error {
+func DeployWithSSH(confList []*conf.Target, certPackage, keyMod string) error {
 	certData, err := os.ReadFile(certPackage)
 	if err != nil {
 		return fmt.Errorf("❌ 读取证书文件失败: %v", err)
@@ -334,7 +337,7 @@ func DeployWithSSH(confList []*conf.Target, certPackage string) error {
 	certFileName := filepath.Base(certPackage)
 
 	for _, c := range confList {
-		fmt.Printf("🚀 === 正在部署到服务器: %s === %s \n", c.TargetIP, c.TargetDir)
+		fmt.Printf("🚀 === 正在部署到服务器: %s === %s \n", c.TargetIP, filepath.Join(c.TargetDir, keyMod))
 
 		if c.TargetIP == "" {
 			fmt.Printf("❌ Name:%s TargetIP is empty", c.TargetName)
@@ -367,14 +370,16 @@ func DeployWithSSH(confList []*conf.Target, certPackage string) error {
 
 		// 上传文件
 
-		if err := uploadFile(client, certData, "/tmp/"+certFileName); err != nil {
+		remotePath := filepath.Join("/tmp", keyMod, certFileName)
+		log.Printf("remotePath:%s", remotePath)
+		if err := uploadFile(client, certData, remotePath); err != nil {
 			log.Printf("❌ 文件上传失败 %s: %v", c.TargetIP, err)
 			continue
 		}
 
 		if c.TargetDir != "" {
 			// 执行命令
-			if err := executeCommands(client, c.TargetDir, certFileName, c.ReloadCmd); err != nil {
+			if err := executeCommands(client, filepath.Join(c.TargetDir, keyMod), certFileName, keyMod, c.ReloadCmd); err != nil {
 				log.Printf("❌ 命令执行失败 %s: %v", c.TargetIP, err)
 				continue
 			}
@@ -430,7 +435,12 @@ func createSSHClient(config *SSHConfig) (*ssh.Client, error) {
 }
 
 func uploadFile(client *ssh.Client, data []byte, remotePath string) error {
+
 	session, err := client.NewSession()
+	session.Run(fmt.Sprintf("mkdir -p %s", filepath.Dir(remotePath)))
+	session.Close()
+
+	session, err = client.NewSession()
 	if err != nil {
 		return err
 	}
@@ -451,12 +461,12 @@ func uploadFile(client *ssh.Client, data []byte, remotePath string) error {
 	return session.Run(cmd)
 }
 
-func executeCommands(client *ssh.Client, remotePath, certFileName, reloadCmd string) error {
+func executeCommands(client *ssh.Client, remotePath, certFileName, keyMod, reloadCmd string) error {
 	commands := []string{
-		fmt.Sprintf("sudo mkdir -p %s", remotePath),
-		fmt.Sprintf("sudo tar -xzvf /tmp/%s -C %s", certFileName, remotePath),
-		fmt.Sprintf("sudo find %s -name '*.key' -exec chmod 600 {} \\;", remotePath),
-		fmt.Sprintf("sudo find %s -name '*.pem' -exec chmod 644 {} \\;", remotePath),
+		fmt.Sprintf("mkdir -p %s", remotePath),
+		fmt.Sprintf("tar -xzvf %s -C %s", filepath.Join("/tmp", keyMod, certFileName), remotePath),
+		fmt.Sprintf("find %s -name '*.key' -exec chmod 600 {} \\;", remotePath),
+		fmt.Sprintf("find %s -name '*.pem' -exec chmod 644 {} \\;", remotePath),
 		reloadCmd,
 		"echo \"✅ 证书部署成功。\"",
 	}

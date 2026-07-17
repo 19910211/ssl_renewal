@@ -11,9 +11,9 @@ import (
 )
 
 var (
-	config, domain, server, days    string
-	staging, force, renew, renewAll bool
-	StartCmd                        = &cobra.Command{
+	config, domain, server, days, keyMod string
+	staging, force, renew, renewAll      bool
+	StartCmd                             = &cobra.Command{
 		Use:          "acme",
 		Example:      "ssl_renewal acme -c config.json -d you.com --server letsencrypt --days 60 --staging",
 		SilenceUsage: true,
@@ -28,10 +28,12 @@ func init() {
 	StartCmd.PersistentFlags().StringVarP(&server, "server", "", "", "证书服务商")
 	StartCmd.PersistentFlags().StringVarP(&days, "days", "", "", "有效天数")
 	StartCmd.Flags().StringVarP(&domain, "domain", "d", "", "域名")
+	StartCmd.Flags().StringVarP(&keyMod, "key_mod", "", "", "证书类型")
 	StartCmd.Flags().BoolVarP(&staging, "staging", "", false, "测试")
 	StartCmd.Flags().BoolVarP(&renew, "renew", "", false, "更新单个")
 	StartCmd.Flags().BoolVarP(&renewAll, "renew-all", "", false, "全部更新")
 	StartCmd.Flags().BoolVarP(&force, "force", "", false, "强制更新")
+
 	StartCmd.MarkFlagRequired("domain")
 }
 
@@ -67,6 +69,9 @@ func run() error {
 	case "dns_volcengine": // 火山云
 		os.Setenv("VOLC_ACCESSKEY", conf.AccessKey)
 		os.Setenv("VOLC_SECRETKEY", conf.AccessSecret)
+	case "dns_cf": // Cloudflare
+		os.Setenv("CF_Account_ID", conf.AccessKey)
+		os.Setenv("CF_Token", conf.AccessSecret)
 	default:
 		fmt.Println("使用系统自带的")
 	}
@@ -104,6 +109,12 @@ func run() error {
 
 	if renewAll {
 		args = append(args, "--renew-all")
+	}
+
+	if keyMod != "ecc" {
+		args = append(args, "--keylength", "2048")
+	} else {
+		args = append(args, "--keylength", "ec-256")
 	}
 
 	// 调用 acme.sh

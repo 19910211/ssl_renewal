@@ -12,6 +12,7 @@ STAGING=""
 CERT_DIR=""
 GENERATE_CERT=true
 INSTALL_CERT=true
+KEY_MOD="ecc"
 
 # 获取当前脚本所在目录
 get_script_dir() {
@@ -31,9 +32,9 @@ set_cert_paths() {
 
     # 如果指定了证书目录，使用指定的目录
     if [[ -n "$CERT_DIR" ]]; then
-        mkdir -p "$CERT_DIR"
-        KEY_FILE="$CERT_DIR/${DOMAIN}.key"
-        FULLCHAIN_FILE="$CERT_DIR/${DOMAIN}.pem"
+        mkdir -p "$CERT_DIR/$KEY_MOD"
+        KEY_FILE="$CERT_DIR/$KEY_MOD/${DOMAIN}.key"
+        FULLCHAIN_FILE="$CERT_DIR/$KEY_MOD/${DOMAIN}.pem"
     else
         # 使用脚本所在目录或默认目录
         local script_dir=$(get_script_dir)
@@ -42,15 +43,15 @@ set_cert_paths() {
         else
             CERT_DIR="$default_dir"
         fi
-        mkdir -p "$CERT_DIR"
-        KEY_FILE="$CERT_DIR/${DOMAIN}.key"
-        FULLCHAIN_FILE="$CERT_DIR/${DOMAIN}.pem"
+        mkdir -p "$CERT_DIR/$KEY_MOD"
+        KEY_FILE="$CERT_DIR/$KEY_MOD/${DOMAIN}.key"
+        FULLCHAIN_FILE="$CERT_DIR/$KEY_MOD/${DOMAIN}.pem"
     fi
 }
 
 # 用法提示
 usage() {
-    echo "Usage: $0 -d domain [--days DAYS] [--server SERVER] [--renew] [--renew-all] [--force] [--staging] [--cert-dir CERT_DIR] [--no-generate] [--no-install]"
+    echo "Usage: $0 -d domain [--days DAYS] [--server SERVER] [--renew] [--renew-all] [--force] [--staging] [--cert-dir CERT_DIR] [--no-generate] [--no-install] [--key_mod]"
         echo ""
         echo "Options:"
         echo "  -d, --domain DOMAIN          域名 (必需)"
@@ -63,6 +64,7 @@ usage() {
         echo "      --cert-dir CERT_DIR      证书文件目录"
         echo "      --no-generate            不执行证书生成，只安装"
         echo "      --no-install             不执行证书安装，只生成"
+        echo "      --key_mod                证书类型 rsa|ecc"
         exit 1
 }
 
@@ -109,6 +111,10 @@ while [[ $# -gt 0 ]]; do
             INSTALL_CERT=false
             shift
             ;;
+        --key_mod)                          # 新增 ECC 选项
+            KEY_MOD="$2"
+            shift 2
+            ;;
         -h|--help)
             usage
             ;;
@@ -128,7 +134,7 @@ fi
 # 执行证书生成
 if [[ "$GENERATE_CERT" == true ]]; then
     # 构建 acme.sh 命令
-    ACME_CMD="/root/.acme.sh/ssl_renewal acme -c /root/.acme.sh/config.json -d $DOMAIN $DAYS $SERVER $RENEW $RENEW_ALL $FORCE $STAGING"
+    ACME_CMD="/root/.acme.sh/ssl_renewal acme -c /root/.acme.sh/config.json -d $DOMAIN $DAYS $SERVER $RENEW $RENEW_ALL $FORCE $STAGING  --key_mod $KEY_MOD"
 
     echo "[执行SSL证书生成命令]: $ACME_CMD"
     eval "$ACME_CMD"
@@ -137,16 +143,23 @@ else
     echo "[跳过证书生成]"
 fi
 
-
+if [[ "$KEY_MOD" != ecc ]]; then
+  ECC="rsa"
+fi
 
 # 设置证书文件路径
 set_cert_paths
 # 执行证书安装
 if [[ "$INSTALL_CERT" == true ]]; then
     # 构建证书安装命令
-    RELOAD_CMD="/usr/local/nginx/sbin/nginx -s reload && /root/.acme.sh/ssl_renewal reload -c /root/.acme.sh/config.json -d $DOMAIN --cert-dir \"$CERT_DIR\""
+    RELOAD_CMD="/usr/local/nginx/sbin/nginx -s reload && /root/.acme.sh/ssl_renewal reload -c /root/.acme.sh/config.json -d $DOMAIN --cert-dir \"$CERT_DIR\" --key_mod $KEY_MOD"
 
-    INSTALL_CMD="/root/.acme.sh/acme.sh --installcert -d $DOMAIN \
+    ECC=""
+    if [[ "$KEY_MOD" == ecc ]]; then
+      ECC="--ecc"
+    fi
+
+    INSTALL_CMD="/root/.acme.sh/acme.sh --installcert -d $DOMAIN $ECC\
         --key-file \"$KEY_FILE\" \
         --fullchain-file \"$FULLCHAIN_FILE\" \
         --reloadcmd \"$RELOAD_CMD\""
